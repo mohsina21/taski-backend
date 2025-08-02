@@ -4,32 +4,42 @@ import checkRole from "../middlware/rolemiddleware.js";
 import Task from "../models/task.js";
 import mongoose from "mongoose";
 
+import User from "../models/user.js";
 const router = express.Router();
 
 router.get("/", authMiddleware, async (req, res) => {
-  console.log("GET /tasks hit by:", req.user.id, req.user.role);
+  const user = req.user;
+
   try {
-    const filter = req.user.role === "admin"
-      ? {}
-      : { assignee: new mongoose.Types.ObjectId(req.user.id) };
+    let tasks;
 
-    console.log("🔍 Filter being applied:", filter);
+    if (user.role === "admin") {
+      // 👑 Admin sees EVERYTHING
+      tasks = await Task.find().populate("assignee", "name email");
+    } else {
+      // 👤 Regular user sees:
+      // - tasks assigned TO them
+      // - tasks they CREATED for others
+      tasks = await Task.find({
+        $or: [
+          { assignee: user.id },
+          { createdBy: user.id },
+        ],
+      }).populate("assignee", "name email");
+    }
 
-    const tasks = await Task.find(filter).populate("assignee", "name email");
-
-    console.log("📋 Tasks found:", tasks.length);
-    console.log("📋 Tasks:", tasks.map(t => ({ id: t._id, name: t.name, assignee: t.assignee })));
-
-    res.status(200).json(tasks);
-  } catch (err) {
-    console.error("Task fetch error:", err.message);
-    res.status(500).json({ message: "Failed to get tasks" });
+    res.json(tasks);
+  } catch (error) {
+    console.error("🔥 Error fetching tasks:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-router.post("/", authMiddleware, checkRole(["admin"]), async (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
-    const {
+    
+
+    let {
       name,
       description,
       assignee,
@@ -39,18 +49,31 @@ router.post("/", authMiddleware, checkRole(["admin"]), async (req, res) => {
       taskType = "General",
     } = req.body;
 
+    if (!assignee) {
+      assignee = req.user.id; 
+    }
+
     if (!name || !description || !assignee) {
-      return res
-        .status(400)
-        .json({ message: "Name, description, and assignee are required" });
+      return res.status(400).json({ message: "Name, description, and assignee are required" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(assignee)) {
       return res.status(400).json({ message: "Invalid assignee ID" });
     }
 
-    console.log("📝 Creating task with assignee:", assignee);
-    
+    const assignedUser = await User.findById(assignee);
+
+    if (!assignedUser) {
+      return res.status(404).json({ message: "Assignee user not found" });
+    }
+
+    if (assignedUser.role === "admin") {
+      return res.status(403).json({ message: "You cannot assign tasks to an admin" });
+    }
+
+   
+
+
     const newTask = new Task({
       name,
       description,
@@ -59,16 +82,19 @@ router.post("/", authMiddleware, checkRole(["admin"]), async (req, res) => {
       priority,
       dueDate,
       taskType,
+      createdBy: req.user.id, 
     });
 
     const savedTask = await newTask.save();
-    console.log("✅ Task created with ID:", savedTask._id, "Assignee:", savedTask.assignee);
     res.status(201).json(savedTask);
   } catch (err) {
-    console.error("Task creation error:", err.message);
+    console.error("❌ Task creation error:", err.message);
     res.status(400).json({ message: "Failed to create task", error: err.message });
   }
 });
+
+
+
 
 router.delete("/:id", authMiddleware, checkRole(["admin"]), async (req, res) => {
   try {
