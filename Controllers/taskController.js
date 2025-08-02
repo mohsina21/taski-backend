@@ -3,7 +3,7 @@ import Task from "../models/task.js";
 export const getTasks = async (req, res) => {
   try {
     const user = req.user;
-
+ console.log("📥 User in getTasks:", user);
     let tasks;
 
     if (user.role === "admin") {

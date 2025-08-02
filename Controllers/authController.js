@@ -19,7 +19,6 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-// SIGNUP
 export const signup = async (req, res) => {
   try {
     const parsed = signupSchema.safeParse(req.body);
@@ -53,7 +52,6 @@ export const signup = async (req, res) => {
   }
 };
 
-// LOGIN
 export const login = async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
