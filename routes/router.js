@@ -20,7 +20,7 @@ router.get("/me", authMiddleware, (req, res) => {
 });
 
 router.get("/admin-only", authMiddleware, checkRole(["admin"]), (req, res) => {
-  res.status(200).json({ message: "Hello Admin 👑" });
+  res.status(200).json({ message: "Hello Admin " });
 });
 
 export default router;
